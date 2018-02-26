@@ -86,7 +86,8 @@ function BlockMove(event) {
     <canvas id="screen" width="384" height="240"></canvas>
   <td>
     <!-- KBD:  <input id="t1" autocapitalize="off" value="" size=6 onchange="form_enter();"><br> -->
-    <button id="reset">Reset</button><br>
+    <button id="reset">Reset</button>
+    <button id="nmi">NMI</button>
     <button id="clear">Clear memory and reset</button><br>
     <button id="save">Save state</button><br>
     <button id="keys">Start Keys of Kraal</button><br>
@@ -94,17 +95,21 @@ function BlockMove(event) {
     Load from tape: <input id="serial_input"  type="file"/><br>
     Save to tape:   <input id="serial_output" type="file"/><br>
     Load Intel Hex: <input id="load_ihex"     type="file"/> <button id="reload">RELOAD</button><br>
-    Docs:<br>
+    <img id="led0_dsk" src=grey25.png> Load DISK0:     <input id="load_disk0"    type="file"/><br>
+    <img id="led1_dsk" src=grey25.png> Load DISK1:     <input id="load_disk1"    type="file"/><br>
+    <img id="led2_dsk" src=grey25.png> Load DISK2:     <input id="load_disk2"    type="file"/><br>
+    <img id="led3_dsk" src=grey25.png> Load DISK3:     <input id="load_disk3"    type="file"/><br>
+    Docs:
     <a href="http://www.nascomhomepage.com/pdf/Nassys3.pdf">NAS-SYS 3</a>
-    <a href="http://www.nascomhomepage.com/asm/Nap.txt">Nap</a><br>
+    <a href="http://www.nascomhomepage.com/asm/Nap.txt">NASCOM assembler package (Nap)</a><br>
     <textarea id="io"></textarea><br>
     PORT 0 TAPE:
-    <img id="led0_tape" src=grey.png><br>
+    <img id="led0_tape" src=grey25.png><br>
     PORT 0xA:
-    <img id="led4" src=red.png>
-    <img id="led3" src=red.png>
-    <img id="led2" src=red.png>
-    <img id="led1" src=red.png>
+    <img id="led4" src=red25.png>
+    <img id="led3" src=red25.png>
+    <img id="led2" src=red25.png>
+    <img id="led1" src=red25.png>
 </table>
 
 <h2>Help needed (2013-12-18)</h2>

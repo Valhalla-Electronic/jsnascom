@@ -66,6 +66,9 @@ var replay_down = true;
 var serial_input = "";
 var serial_input_p = 0;
 
+fdc = new Object();;
+fdc.s = { IDLE : 0, DRV: 1, TRK: 2, INRD : 3, INWR : 4 };
+
 function advance_replay() {
     replay_active = replay_active_go;
     sim_key(replay_line[replay_p], replay_down);
@@ -247,6 +250,18 @@ function ui_ihex_load() {
     reader.readAsBinaryString(document.getElementById('load_ihex').files[0]);
 }
 
+// Update an LED in the UI
+function ui_led(id,wdata,mask) {
+    if (document.getElementById(id)) {
+        var x = document.getElementById(id)
+        if ((wdata & mask) ) {
+            x.setAttribute("src", "red25.png");
+        } else {
+            x.setAttribute("src", "grey25.png");
+        }
+    }
+}
+
 function nascom_init() {
     var i;
 
@@ -318,6 +333,9 @@ function nascom_init() {
 
     if (document.getElementById("reset"))
         document.getElementById("reset").onclick = z80_reset;
+
+    if (document.getElementById("nmi"))
+        document.getElementById("nmi").onclick = z80_nmi;
 
     if (document.getElementById("clear"))
         document.getElementById("clear").onclick = nascom_clear;
@@ -402,6 +420,7 @@ function nascom_init() {
     }
 
     z80_init();
+    fdc_init();
 
     var ea = 64 * 1024;
     phys_mem   = new ArrayBuffer(ea);
@@ -667,6 +686,14 @@ function readport(port) {
         else
             return 192;
 
+    case 0xE0:
+    case 0xE1:
+    case 0xE2:
+    case 0xE3:
+    case 0xE4:
+    case 0xE5:
+        return fdc_rd(port);
+
     default:
         console.log("readport "+port);
         return 0;
@@ -676,8 +703,8 @@ function readport(port) {
 function writeport(port, value) {
     port &= 255;
 
-    if (port != 0 || (value & ~31) != 0)
-        console.log("writeport "+port+","+value);
+//    if (port != 0 || (value & ~31) != 0)
+//        console.log("writeport "+port+","+value);
 
     if (port == 0) {
         /* KBD */
@@ -734,18 +761,11 @@ function writeport(port, value) {
 
 
         if ((tape_led_last ^ value) & 0x10) {
-            tape_led_last = value & 0x10
+            tape_led_last = value & 0x10;
             if (document.getElementById("io"))
                 document.getElementById("io").value = "port 0 tape: " + tape_led;
 
-            if (document.getElementById("led0_tape")) {
-                var x = document.getElementById("led0_tape");
-                if (tape_led_last) {
-                    x.setAttribute("src", "red.png");
-                } else {
-                    x.setAttribute("src", "grey.png");
-                }
-            }
+            ui_led("led0_tape", tape_led_last, tape_led_last);
 	}
     }
 
@@ -757,42 +777,13 @@ function writeport(port, value) {
         if (document.getElementById("io"))
             document.getElementById("io").value = "port 10:" + value;
 
-        if (document.getElementById("led1")) {
-            var x = document.getElementById("led1");
-
-            if ((value & 1) == 0) {
-                x.setAttribute("src", "grey.png");
-            } else {
-                x.setAttribute("src", "red.png");
-            }
-        }
-
-      if (document.getElementById("led2")) {
-          var x = document.getElementById("led2")
-          if ((value & 2) == 0) {
-              x.setAttribute("src", "grey.png");
-          } else {
-              x.setAttribute("src", "red.png");
-          }
-      }
-
-      if (document.getElementById("led3")) {
-          var x = document.getElementById("led3");
-          if ((value & 4) == 0) {
-              x.setAttribute("src", "grey.png");
-          } else {
-              x.setAttribute("src", "red.png");
-          }
-      }
-
-      if (document.getElementById("led4")) {
-          var x = document.getElementById("led4");
-          if ((value & 8) == 0) {
-              x.setAttribute("src", "grey.png");
-          } else {
-              x.setAttribute("src", "red.png");
-          }
-      }
+        ui_led("led1", value, 1);
+        ui_led("led2", value, 2);
+        ui_led("led3", value, 4);
+        ui_led("led4", value, 8);
+    }
+    if ((port & 0xF0) == 0xE0) {
+        fdc_wr(port, value);
     }
 }
 
@@ -823,7 +814,7 @@ function writebyte_internal(addr, val) {
     }
 }
 
-var char_height = 15; // PAL=12 , NTSC = 14 ?? (I think that's should be 13/15)
+var char_height = 15; // PAL=12 , NTSC = 14 ?? (I think that should be 13/15)
 function drawScreenByte(addr, val) {
     var x = (addr & 63) - 10;
     var y = ((addr >> 6) + 1) & 15;
@@ -876,4 +867,293 @@ function nasEvtUp(evt) {
 function nasCodeUp(charCode) {
     //console.log("nasEvtDn "+evt.target.textContent);
     nascomCharCode(charCode, false);
+}
+
+// Emulation of MAP80/GM809 Floppy Disk Controller, WD1797/WD2797
+// floppy disk controller. Goal is not to write an emulation that can be used to
+// debug new disk drivers. Rather, it is to write an emulation that can run Known
+// Good disk drivers. As such, this does the minimum emulation.
+function fdc_init() {
+    // disk geometry. Used to turn a track/sector into an offset into
+    // a binary disk image. If necessary, could be different per-drive
+    // in order to allow (eg) transfer from one drive image to another.
+    fdc.SECTOR_SZ = 256;
+    fdc.SECTORS = 18;
+    fdc.TRACKS = 80;
+    fdc.SIDES = 1;
+
+    fdc.state = fdc.s.IDLE;
+
+    fdc.file = [];
+    fdc.buf = [];
+    // 4 drives
+    fdc.file[0] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
+    fdc.file[1] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
+    fdc.file[2] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
+    fdc.file[3] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
+    // fdc.buf[0]..[3] assigned when the files are loaded
+    // 6-byte buffer for read address command.
+    fdc.buf[4] = new Uint8Array(6);
+
+    // For reads and writes, bufindx is calculated as the first offset
+    // in the buffer and is incremented as bytes are read. buflast is
+    // the final byte to be read.
+    // The buffer is either the current drive or a 6-byte buffer used
+    // for the read address command.
+    fdc.bufindx = 0;
+    fdc.buflast = 0;
+    // fdc.buf[fdc.current] shows where data is coming from/going to. Its set to the
+    // selected drive except for read address commands, where it's set to 4.
+    fdc.current = 0;
+
+    // values most-recently written to hardware registers
+    fdc.cmd = 0;
+    fdc.trk = 0;
+    fdc.sec = 0;
+    fdc.dat = 0;
+    fdc.drv = 0;
+    // emulates value to read back from status register
+    fdc.status = 0;
+    // emulates value to read back from port E4/E5.
+    fdc.pinstatus = 0;
+
+    // disk image handling
+    fdc_ld_image("load_disk0", 0);
+    fdc_ld_image("load_disk1", 1);
+    fdc_ld_image("load_disk2", 2);
+    fdc_ld_image("load_disk3", 3);
+
+    console.log("fdc_init completed.");
+}
+
+function fdc_wr(port,value) {
+    switch (port & 0xf) {
+    case 0: // FDC command register
+        // writing to the command register clears interrupt (but the
+        // emulated command may set it again immediately)
+        fdc.pinstatus = fdc.pinstatus & 0xfe;
+
+        fdc.cmd = value;
+
+        if ((fdc.cmd & 0xf0) == 0xd0) {
+            // interrupt. Any data we had buffered is discarded implicitly by the state change.
+            fdc.pinstatus = fdc.pinstatus | 1;
+
+            if (fdc.state != fdc.s.IDLE) {
+                fdc.bufindx = fdc.SECTOR_SZ;
+                fdc.state = fdc.s.DRV;
+            }
+            console.log("fdc_wr cmd=interrupt");
+            break;
+        }
+        if (fdc.state == fdc.s.IDLE) {
+            console.log("fdc_wr warning: command write with no drive selected");
+        }
+        if ((fdc.cmd & 0xf0) == 0x00) {
+            // restore.
+            fdc.trk = 0;
+            fdc.state = fdc.s.TRK;
+            fdc.pinstatus = fdc.pinstatus | 1;
+            fdc.status = 0x26;
+            console.log("fdc_wr cmd=restore");
+        }
+        else if ((fdc.cmd & 0xf0) == 0x10) {
+            // seek
+            fdc.state = fdc.s.TRK;
+            fdc.trk = fdc.dat;
+            fdc.pinstatus = fdc.pinstatus | 1;
+            if (fdc.trk == 0) {
+                fdc.status = 0x26;
+            }
+            else {
+                fdc.status = 0x22;
+            }
+            console.log("fdc_wr cmd=seek, track="+fdc.trk);
+        }
+        else if ((fdc.cmd & 0xf0) == 0x30) {
+            // step and update track register
+            fdc.state = fdc.s.TRK;
+            fdc.trk = fdc.trk+1; // [NAC HACK 2018Feb25] should be same as prev direction... needs fixing!
+            fdc.pinstatus = fdc.pinstatus | 1;
+            if (fdc.trk == 0) {
+                fdc.status = 0x26;
+            }
+            else {
+                fdc.status = 0x22;
+            }
+            console.log("fdc_wr cmd=step, track="+fdc.trk);
+        }
+        else if ((fdc.cmd & 0xf0) == 0xc0) {
+            // read address. Used by PolyDos to detect whether a disk is
+            // present in the drive.
+            fdc.pinstatus = fdc.pinstatus | 0x80;
+            fdc.status = 0x00; // [NAC HACK 2018Feb25] fix
+            fdc.state = fdc.s.INRD;
+            fdc.current = 4;
+            fdc.bufindx = 0;
+            fdc.buflast = 5;
+            fdc.buf[4][0] = fdc.trk;
+            fdc.buf[4][1] = 0; // side
+            fdc.buf[4][2] = fdc.sec; // sector [NAC HACK 2015Jun10] ?
+            fdc.buf[4][3] = 1; // sector length 0:128 1:256 2:512 3:1024
+            fdc.buf[4][4] = 0; // CRC
+            fdc.buf[4][5] = 0; // CRC
+            console.log("fdc_wr read_address - TODO: fail for drive where no image loaded");
+        }
+        else if ((fdc.cmd & 0xf0) == 0x80) {
+            // read sector
+            fdc.pinstatus = fdc.pinstatus | 0x80;
+            fdc.status = 0x03;
+            fdc.state = fdc.s.INRD;
+
+            fdc.current = hot2bin(fdc.drv) - 1;
+            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS + fdc.sec*fdc.SECTOR_SZ;
+            fdc.buflast = fdc.bufindx + fdc.SECTOR_SZ - 1;
+            console.log("fdc_wr read_sector t="+fdc.trk+" s="+fdc.sec+" data index "+fdc.current);
+        }
+        else if ((fdc.cmd & 0xf0) == 0xa0) {
+            // write sector
+            fdc.pinstatus = fdc.pinstatus | 0x80;
+            fdc.status = 0x03;
+            fdc.state = fdc.s.INWR;
+
+            fdc.current = hot2bin(fdc.drv) - 1;
+            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS + fdc.sec*fdc.SECTOR_SZ;
+            fdc.buflast = fdc.bufindx + fdc.SECTOR_SZ - 1;
+            console.log("fdc_wr write_sector t="+fdc.trk+" s="+fdc.sec+" data index "+fdc.current);
+        }
+        else {
+            console.log("fdc_wr warning: command write with unknown command "+value);
+        }
+        break;
+    case 1: // FDC track register
+        fdc.trk = value; //[NAC HACK 2015Jun03] really? or is this effectively RO?
+        console.log("fdc_wr trk="+fdc.trk);
+        break;
+    case 2: // FDC sector register
+        fdc.sec = value;
+        // console.log("fdc_wr sec="+fdc.sec);
+        break;
+    case 3: // FDC data register (wr or parameter for seek)
+        fdc.dat = value;
+
+        if (fdc.state == fdc.s.INWR) {
+            if (fdc.bufindx == fdc.buflast) {
+                // last one
+                fdc.state = fdc.s.TRK;
+                fdc.status = 0x00;
+                fdc.pinstatus = (fdc.pinstatus & 0x7f) | 1;
+            }
+            // console.log("fdc_wr byte "+fdc.bufindx+" data: "+(fdc.buf[fdc.current][fdc.bufindx]).toString(16));
+            fdc.buf[fdc.current][fdc.bufindx++] = fdc.dat;
+        }
+        break;
+    case 4: // select drive, motor on, FM/MFM
+    case 5:
+
+        // FDC Drive Select lights in the UI
+        ui_led("led0_dsk", value, 1);
+        ui_led("led1_dsk", value, 2);
+        ui_led("led2_dsk", value, 4);
+        ui_led("led3_dsk", value, 8);
+
+        if ((fdc.drv & 0x0f) == (value & 0xf)) {
+            console.log("fdc_wr keep motor running..");
+            // just keep the motor running
+        }
+        else {
+            if ((fdc.state == fdc.s.INWR) || (fdc.state == fdc.INRD)) {
+                console.log("fdc_wr error: select drive "+value+" while in state "+fdc.state);
+            }
+            else {
+                if ((value & 0x20) == 0) {
+                    console.log("fdc_wr info: select drive "+value+" -- motor off");
+                }
+                fdc.drv = value;
+                fdc.state = fdc.s.DRV;
+            }
+        }
+        break;
+    default:
+        console.log("fdc_wr error: unknown port "+port+","+value);
+    }
+}
+
+function fdc_rd(port) {
+    switch (port & 0xf) {
+    case 0: // status - bit assignment depends upon command. Refer
+            // to data sheet.
+
+        // read of status clears down INTRQ
+        fdc.pinstatus = fdc.pinstatus & 0xfe;
+        // console.log("fdc_rd status: 0x"+(fdc.status).toString(16));
+        return fdc.status;
+    case 1: // track
+        // console.log("fdc_rd track:"+fdc.trk);
+        return fdc.trk;
+    case 2: // sector
+        // console.log("fdc_rd sector:"+fdc.sec);
+        return fdc.sec;
+    case 3: // data
+        if (fdc.state == fdc.s.INRD) {
+            if (fdc.bufindx == fdc.buflast) {
+                // last one
+                fdc.state = fdc.s.TRK;
+                fdc.status = 0x00;
+                fdc.pinstatus = (fdc.pinstatus & 0x7f) | 1;
+            }
+            // console.log("fdc_rd byte "+fdc.bufindx+" data: "+(fdc.buf[0][fdc.bufindx]).toString(16));
+            return fdc.buf[fdc.current][fdc.bufindx++];
+        }
+        else {
+            console.log("ERROR fdc_rd but not INRD");
+            return 0;
+        }
+    case 4: // pin status
+    case 5:
+        // 7: DRQ     (1: ready for byte/byte available)
+        // 6: 0
+        // 5: 0
+        // 4: 0
+        // 3: 0
+        // 2: 0
+        // 1: !READY  (0: drive ready. Emulated as always 0)
+        // 0: INTRQ   (1: when command completed)
+        // console.log("fdc_rd pinstatus: 0x"+(fdc.pinstatus).toString(16));
+        return fdc.pinstatus;
+
+    default:
+        console.log("fdc_rd error: unknown port "+port);
+        return 0;
+    }
+}
+
+function fdc_ld_image(id, index) {
+    if (fileIOOk && document.getElementById(id))
+        document.getElementById(id).onchange = function() {
+        var reader = new FileReader();
+        reader.onload = function(theFile) {
+            console.log("Onload: Start to load disk "+id);
+            fdc.file[index] = reader.result;
+        }
+        reader.onloadend = function(theFile) {
+            console.log("Onload: Loaded disk "+id+"("+fdc.file[index].byteLength+" bytes)");
+            fdc.buf[index] = new Uint8Array(fdc.file[index]);
+        }
+            // Read in the image file as byte sequence
+            console.log("Read file "+this.files[0].name);
+            reader.readAsArrayBuffer(this.files[0]);
+        }
+}
+
+function hot2bin (value) {
+    switch (value & 0xf) {
+    case 0: return 0;
+    case 1: return 1;
+    case 2: return 2;
+    case 4: return 3;
+    case 8: return 4;
+    default:
+        console.log("hot2bin unexpected value "+value&0xf);
+    }
 }
