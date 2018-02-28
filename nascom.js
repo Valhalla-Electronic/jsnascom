@@ -1027,8 +1027,8 @@ function fdc_wr(port,value) {
         }
         break;
     case 1: // FDC track register
-        fdc.trk = value; //[NAC HACK 2015Jun03] really? or is this effectively RO?
-        console.log("fdc_wr trk="+fdc.trk);
+        fdc.trk = value;
+        // console.log("fdc_wr trk="+fdc.trk);
         break;
     case 2: // FDC sector register
         fdc.sec = value;
