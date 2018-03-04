@@ -348,57 +348,57 @@ function nascom_init() {
 
     if (fileIOOk && document.getElementById("serial_input"))
         document.getElementById("serial_input").onchange = function() {
-        var reader = new FileReader();
-        reader.onload = (function(theFile) {
-            return function(contents) {
-                serial_input = contents.target.result;
-                serial_input_p = 0;
-            };
-        })(this.files[0]);
+            var reader = new FileReader();
+            reader.onload = (function(theFile) {
+                return function(contents) {
+                    serial_input = contents.target.result;
+                    serial_input_p = 0;
+                };
+            })(this.files[0]);
 
-        // Read in the image file as a data URL.
-        reader.readAsBinaryString(this.files[0]);
-    }
+            // Read in the image file as a data URL.
+            reader.readAsBinaryString(this.files[0]);
+        }
 
     if (fileIOOk && document.getElementById('load_nas'))
-    document.getElementById('load_nas').onchange = function() {
-      var reader = new FileReader();
-      reader.onload = (function(theFile) {
-        return function(contents) {
-            var s = contents.target.result;
-            var p = 0;
+        document.getElementById('load_nas').onchange = function() {
+            var reader = new FileReader();
+            reader.onload = (function(theFile) {
+                return function(contents) {
+                    var s = contents.target.result;
+                    var p = 0;
 
-            // Expect lines like this:
-            // nnnXXXXnXXnXXnXXnXXnXXnXXnXXnXXnXXnnnnn where X is a
-            // hexidecimal digit and n is not.  Note, the last digit
-            // is a checksum, but we treat it like any other with no
-            // ill effect.
+                    // Expect lines like this:
+                    // nnnXXXXnXXnXXnXXnXXnXXnXXnXXnXXnXXnnnnn where X is a
+                    // hexidecimal digit and n is not.  Note, the last digit
+                    // is a checksum, but we treat it like any other with no
+                    // ill effect.
 
-            var a = 0;
-            while (p < s.length) {
-                while (p < s.length && !isxdigit(s.charCodeAt(p))) ++p;
-                var d, v;
-                for (v = d = 0; p < s.length && isxdigit(s.charCodeAt(p)); ++p, ++d)
-                    v = 16*v + hexdigitValue(s.charCodeAt(p));
-                if (d == 4)
-                    a = v;
-                else if (d == 2)
-                    memory[a++] = v;
-            }
-        };
-      })(this.files[0]);
+                    var a = 0;
+                    while (p < s.length) {
+                        while (p < s.length && !isxdigit(s.charCodeAt(p))) ++p;
+                        var d, v;
+                        for (v = d = 0; p < s.length && isxdigit(s.charCodeAt(p)); ++p, ++d)
+                            v = 16*v + hexdigitValue(s.charCodeAt(p));
+                        if (d == 4)
+                            a = v;
+                        else if (d == 2)
+                            memory[a++] = v;
+                    }
+                };
+            })(this.files[0]);
 
-      // Read in the image file as a data URL.
-      reader.readAsBinaryString(this.files[0]);
-    }
+            // Read in the image file as a data URL.
+            reader.readAsBinaryString(this.files[0]);
+        }
 
     if (document.getElementById('load_ihex'))
         document.getElementById('load_ihex').onchange = ui_ihex_load;
 
     if (document.getElementById('reload'))
         document.getElementById('reload').onclick  =
-           function (evt) { ui_ihex_load();
-                            return false; };
+        function (evt) { ui_ihex_load();
+                         return false; };
 
     /* This only works on Chrome */
 
@@ -679,7 +679,7 @@ function readport(port) {
            #define UART_F_ERROR      8
            #define UART_P_ERROR      4
            #define UART_O_ERROR      2
-         */
+        */
 
         if (serial_input.length == serial_input_p || !tape_led)
             return 64;
