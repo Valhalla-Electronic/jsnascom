@@ -53,7 +53,7 @@ var keyStates = [];
 var keyp = 0;
 var port0 = 0;
 var tape_led = 0;
-var led_off_str = "\n"; //[NAC HACK 2018Mar05] gets confused with empty string. To be fixed..
+var led_off_str = "";
 var keym = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 var replay_active = 0;
@@ -80,6 +80,8 @@ function advance_replay() {
 }
 
 function replay_kbd(str) {
+    if (str.length == 0)
+        return;
     replay_active = replay_active_go;
     replay_p = 0;
     replay_down = true;
