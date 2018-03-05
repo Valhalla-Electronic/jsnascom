@@ -53,8 +53,7 @@ var keyStates = [];
 var keyp = 0;
 var port0 = 0;
 var tape_led = 0;
-var tape_led_last = 0;
-var led_off_str = "";
+var led_off_str = "\n"; //[NAC HACK 2018Mar05] gets confused with empty string. To be fixed..
 var keym = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 var replay_active = 0;
@@ -484,9 +483,6 @@ var kbd_translation_shifted = [
 /* 7 */  "`_R`C$VG"
 ];
 
-var gr_row = 5;
-var gr_col = 6;
-
 function sim_key(ch, down) {
     var row = -1, bit, shifted = 0;
 
@@ -663,7 +659,6 @@ function readport(port) {
     switch (port) {
     case 0:
         /* KBD */
-        /* printf("[%d]", keyp); */
         return ~keym[keyp];
 
     case 1:
@@ -754,19 +749,19 @@ function writeport(port, value) {
             event_next_event = tstates + 25;
         }
 
-        if (tape_led && ((value >> 4) & 1) == 0) {
-            replay_kbd(led_off_str);
+        if (tape_led != ((value >> 4) & 1)) {
+            // state of tape_led has changed
             tape_led = (value >> 4) & 1;
-        }
 
-
-        if ((tape_led_last ^ value) & 0x10) {
-            tape_led_last = value & 0x10;
             if (document.getElementById("io"))
                 document.getElementById("io").value = "port 0 tape: " + tape_led;
 
-            ui_led("led0_tape", tape_led_last, tape_led_last);
-	}
+            ui_led("led0_tape", tape_led, tape_led);
+
+            // if the tape has just turned off, execute commands (if any)
+            if (tape_led == 0)
+                replay_kbd(led_off_str);
+        }
     }
 
     if (port == 1) {
@@ -852,7 +847,7 @@ function nasEvtDn(evt) {
 }
 
 function nasCodeDn(charCode) {
-    //console.log("nasEvtDn "+evt.target.textContent);
+    //console.log("nasCodeDn "+evt.target.textContent);
     nascomCharCode(charCode, true);
 }
 
@@ -865,7 +860,7 @@ function nasEvtUp(evt) {
 }
 
 function nasCodeUp(charCode) {
-    //console.log("nasEvtDn "+evt.target.textContent);
+    //console.log("nasCodeUp "+evt.target.textContent);
     nascomCharCode(charCode, false);
 }
 
