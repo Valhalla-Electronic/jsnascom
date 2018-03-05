@@ -839,32 +839,6 @@ function paintScreen() {
     }
 }
 
-function nasKeyDn(ch) {
-    sim_key(ch, true);
-}
-
-function nasEvtDn(evt) {
-    //console.log("nasEvtDn "+evt.target.textContent);
-    nasKeyDn(evt.target.textContent);
-}
-
-function nasCodeDn(charCode) {
-    //console.log("nasCodeDn "+evt.target.textContent);
-    nascomCharCode(charCode, true);
-}
-
-function nasKeyUp(ch) {
-    sim_key(ch, false);
-}
-function nasEvtUp(evt) {
-    //console.log("nasEvtUp "+evt.target.textContent);
-    nasKeyUp(evt.target.textContent);
-}
-
-function nasCodeUp(charCode) {
-    //console.log("nasCodeUp "+evt.target.textContent);
-    nascomCharCode(charCode, false);
-}
 
 // Emulation of MAP80/GM809 Floppy Disk Controller, WD1797/WD2797
 // floppy disk controller. Goal is not to write an emulation that can be used to
