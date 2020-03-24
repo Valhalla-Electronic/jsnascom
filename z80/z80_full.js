@@ -130,6 +130,9 @@ function z80_reset() {
   z80.halted=0;
 }
 
+function z80_halted() {
+  return z80.halted;
+}
 
 function z80_interrupt() {
   
@@ -169,6 +172,7 @@ function z80_nmi() {
   
 
   z80.iff1 = 0;
+  if( z80.halted ) { z80.pc++; z80.pc &= 0xffff; z80.halted = false; }
 
   z80.sp = (z80.sp - 1) & 0xffff;
   writebyte_internal( z80.sp, (z80.pc >> 8) );

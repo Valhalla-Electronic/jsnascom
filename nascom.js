@@ -104,7 +104,7 @@ function nascom_unload() {
     for (i = 0; i < 16384; ++i)
         serialized += phys_mem32[i] + ",";
     localStorage.setItem("memory", serialized);
-    //console.log("memory="+serialized);
+    console.log("Save memory");
 }
 
 // XXX Shouldn't assume an int, but a char
@@ -133,6 +133,7 @@ function start_keys() {
 }
 
 function nascom_load(val) {
+    console.log("Restore memory");
     if (!phys_mem32)
         return;
     var aval = val.split(",");
@@ -619,6 +620,7 @@ function frame() {
     tstates = 0;
 
     z80_do_opcodes();
+    ui_led("led_halt", z80_halted(), 1);
 
     if (nmi_pending) {
         nmi_pending = false;
@@ -758,7 +760,7 @@ function writeport(port, value) {
             if (document.getElementById("io"))
                 document.getElementById("io").value = "port 0 tape: " + tape_led;
 
-            ui_led("led0_tape", tape_led, tape_led);
+            ui_led("led_tape", tape_led, tape_led);
 
             // if the tape has just turned off, execute commands (if any)
             if (tape_led == 0)
