@@ -48,7 +48,6 @@ var canvas;
 var ctx;
 var imageData;
 var imageDataData;
-var keyStates = [];
 
 var keyp = 0;
 var port0 = 0;
@@ -65,7 +64,9 @@ var replay_down = true;
 var serial_input = "";
 var serial_input_p = 0;
 
-fdc = new Object();;
+var nmi_pending = false;
+
+fdc = new Object();
 fdc.s = { IDLE : 0, DRV: 1, TRK: 2, INRD : 3, INWR : 4 };
 
 function advance_replay() {
@@ -95,9 +96,7 @@ function form_enter() {
     t1.value = ""; */
 }
 
-var nmi_pending = false;
-
-function nascom_unload() {
+function nascom_save() {
     if (!phys_mem32)
         return;
     var serialized = "";
@@ -124,12 +123,19 @@ function isxdigit(ch) { return hexdigitValue(ch) != -1; }
 
 var fileIOOk = false;
 
-function start_keys() {
-    serial_input = repo['KEYS.CAS'];
+function start_repo_program() {
+    var program =  document.getElementById("LibProg").value;
+    console.log("Start " + program);
+
+    serial_input = repo[program];
     serial_input_p = 0;
     z80_reset();
-    replay_kbd("j\n\ncload\n");
-    led_off_str = "run\n";
+// for BASIC
+//    replay_kbd("j\n\ncload\n");
+//    led_off_str = "run\n";
+// for M.C
+    replay_kbd("R\n");
+    led_off_str = "E1000\n";
 }
 
 function nascom_load(val) {
@@ -139,6 +145,14 @@ function nascom_load(val) {
     var aval = val.split(",");
     for (i = 0; i < 16384; ++i)
         phys_mem32[i] = parseInt(aval[i]);
+}
+
+
+// Run when you navigate away from jsnascom.html
+// Could call nascom_save() but that might not be what the
+// user wants, so leave that as an explicit action ("save state" button)
+function nascom_unload(val) {
+    console.log("Bye bye");
 }
 
 function read_hex(s, p, n) {
@@ -300,7 +314,7 @@ function nascom_init() {
         var xx = document.getElementById("t1");
 
         if (xx) {
-            //xx.onclick = start_keys;
+            //xx.onclick = start_repo_program;
             //xx.onkeydown  = function (evt) { alert("keydown"+(evt.which?evt.which :evt.keyCode)); return false; };
             //xx.onkeyup    = function (evt) { alert("keyup"+(evt.which?evt.which :evt.keyCode));   return false; };
             xx.onkeypress    = function (evt) {
@@ -334,7 +348,7 @@ function nascom_init() {
 //  document.addEventListener('touchend', touchEnd, false);
 
     if (document.getElementById("reset"))
-        document.getElementById("reset").onclick = z80_reset;
+        document.getElementById("reset").onclick = nascom_reset;
 
     if (document.getElementById("nmi"))
         document.getElementById("nmi").onclick = z80_nmi;
@@ -343,10 +357,10 @@ function nascom_init() {
         document.getElementById("clear").onclick = nascom_clear;
 
     if (document.getElementById("save"))
-        document.getElementById("save").onclick = nascom_unload;
+        document.getElementById("save").onclick = nascom_save;
 
     if (document.getElementById("keys"))
-        document.getElementById("keys").onclick = start_keys;
+        document.getElementById("keys").onclick = start_repo_program;
 
     if (fileIOOk && document.getElementById("serial_input"))
         document.getElementById("serial_input").onchange = function() {
@@ -421,6 +435,20 @@ function nascom_init() {
             saveas.src = window.createObjectURL(blob);
     }
 
+    // Populate list of library programs
+    var catOptions = "";
+    Object.keys(repo).forEach(function(key) {
+        catOptions += "<option>" + key + "</option>";
+    });
+    document.getElementById("LibProg").innerHTML = catOptions;
+
+    // Populate list of ROMs
+    var ROMOptions = "";
+    Object.keys(nascom_rom).forEach(function(key) {
+        ROMOptions += "<option>" + key + "</option>";
+    });
+    document.getElementById("Monitor").innerHTML = ROMOptions;
+
     z80_init();
     fdc_init();
 
@@ -439,10 +467,6 @@ function nascom_init() {
     if (val !== null)
         nascom_load(val);
 
-    // NASSYS-3
-    for (i = 0; i < 0x800; i++)
-        memory[i] = rom_monitor.charCodeAt(i);
-
     // ROM Basic
     for (i = 0xE000; i < 0x10000; i++)
         memory[i] = rom_basic.charCodeAt(i - 0xE000);
@@ -454,6 +478,36 @@ function nascom_init() {
 
     run();
 }
+
+
+function nascom_monitor() {
+    nascom_reset();
+}
+
+function nascom_tape_lib() {
+    console.log("In nascom_tape_lib");
+    start_repo_program();
+}
+
+// The very first time you run, there is no saved persistent data
+// and therefore no ROM to boot from. After you press "reset" it
+// loads the (selected) ROM
+function nascom_reset() {
+
+    // Load the selected ROM monitor
+    // [NAC HACK 2020Mar26] should cope with 1K roms as well. This just
+    // ignored overrun of the array!!
+//    var x = document.querySelector('input[name="rom_monitor"]:checked').value;
+    var x =  document.getElementById("Monitor").value;
+
+
+    console.log("In nascom_reset loading "+ nascom_rom[x].length + " bytes from ROM "+x);
+    for (i = 0; i < 0x800; i++)
+        memory[i] = nascom_rom[x].charCodeAt(i);
+
+    z80_reset();
+}
+
 
 function nascom_clear() {
     for (i = 0x800; i < 0xE000; i++)

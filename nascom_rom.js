@@ -1,0 +1,1 @@
+var nascom_rom = {};

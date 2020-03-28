@@ -32,7 +32,9 @@
 <head>
 <title>JavaScript Nascom 2 Emulator 0.2</title>
 
+<!--
 <a href="https://github.com/tommythorn/jsnascom"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png" alt="Fork me on GitHub"></a>
+-->
 
 <!-- Tricks and help from
  http://matt.might.net/articles/how-to-native-iphone-ipad-apps-in-javascript/
@@ -58,19 +60,24 @@
  <!-- <meta name="viewport" content="user-scalable=no,initial-scale=0.8333" /> -->
 
  <style>
-body {
- margin: 0px ;
-}
+   body {
+   margin: 0px ;
+   }
 </style>
 <script>
-// To be called when there's a move event on the body itself:
-function BlockMove(event) {
- // Tell Safari not to move the window.
- event.preventDefault() ;
-}
+  // To be called when there's a move event on the body itself:
+  function BlockMove(event) {
+  // Tell Safari not to move the window.
+  event.preventDefault() ;
+  }
 </script>
 <script type="text/javascript" src="rom_font.js"></script>
-<script type="text/javascript" src="rom_monitor.js"></script>
+<script type="text/javascript" src="nascom_rom.js"></script>
+<script type="text/javascript" src="NAS-SYS3.js"></script>
+<script type="text/javascript" src="NAS-SYS1.js"></script>
+<script type="text/javascript" src="NASBUGT4.js"></script>
+<script type="text/javascript" src="BBUG.js"></script>
+<script type="text/javascript" src="NASBUGT2.js"></script>
 <script type="text/javascript" src="rom_basic.js"></script>
 <script type="text/javascript" src="z80/z80_full.js"></script>
 <script type="text/javascript" src="z80/z80_ops_full.js"></script>
@@ -84,13 +91,24 @@ function BlockMove(event) {
 
     <!-- <h1>Nascom 2</h1> -->
     <canvas id="screen" width="384" height="240"></canvas>
-  <td>
+    <td>
     <!-- KBD:  <input id="t1" autocapitalize="off" value="" size=6 onchange="form_enter();"><br> -->
     <button id="reset">Reset</button>
     <button id="nmi">NMI</button>
-    <button id="clear">Clear memory and reset</button><br>
+    <button id="clear">Clear RAM and Reset</button>
     <button id="save">Save state</button><br>
-    <button id="keys">Start Keys of Kraal</button><br>
+
+    TAPE: <img id="led_tape" src=grey25.png>
+    HALT: <img id="led_halt" src=grey25.png><br>
+
+    <select name="Monitor" id="Monitor" onchange="nascom_monitor()">
+      <option value="" disabled selected>Select</option>
+    </select>
+
+    <select name="Library Program" id="LibProg" onchange="nascom_tape_lib()">
+      <option value="" disabled selected>Select</option>
+    </select> <br>
+
     Load NAS:       <input id="load_nas"      type="file"/><br>
     Load from tape: <input id="serial_input"  type="file"/><br>
     Save to tape:   <input id="serial_output" type="file"/><br>
@@ -103,10 +121,6 @@ function BlockMove(event) {
     <a href="http://www.nascomhomepage.com/pdf/Nassys3.pdf">NAS-SYS 3</a>
     <a href="http://www.nascomhomepage.com/asm/Nap.txt">NASCOM assembler package (Nap)</a><br>
     <textarea id="io"></textarea><br>
-    PORT 0 TAPE:
-    <img id="led_tape" src=grey25.png>
-    HALT:
-    <img id="led_halt" src=grey25.png><br>
     PORT 0xA:
     <img id="led4" src=red25.png>
     <img id="led3" src=red25.png>
