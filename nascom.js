@@ -348,19 +348,16 @@ function nascom_init() {
 //  document.addEventListener('touchend', touchEnd, false);
 
     if (document.getElementById("reset"))
-        document.getElementById("reset").onclick = nascom_reset;
+        document.getElementById("reset").onclick = ui_reset;
 
     if (document.getElementById("nmi"))
         document.getElementById("nmi").onclick = z80_nmi;
 
     if (document.getElementById("clear"))
-        document.getElementById("clear").onclick = nascom_clear;
+        document.getElementById("clear").onclick = ui_cold_start;
 
     if (document.getElementById("save"))
         document.getElementById("save").onclick = nascom_save;
-
-    if (document.getElementById("keys"))
-        document.getElementById("keys").onclick = start_repo_program;
 
     if (fileIOOk && document.getElementById("serial_input"))
         document.getElementById("serial_input").onchange = function() {
@@ -458,18 +455,13 @@ function nascom_init() {
     phys_mem16 = new Uint16Array(this.phys_mem, 0, ea / 2);
     phys_mem32 = new Int32Array(this.phys_mem, 0, ea / 4);
 
-    // Memory
-    for (i = 0x800; i < 0xE000; i++)
-        memory[i] = 0;
-
     var val = localStorage.getItem("memory");
-
-    if (val !== null)
+    if (val == null) {
+        clear_ram_default_rom();
+    }
+    else {
         nascom_load(val);
-
-    // ROM Basic
-    for (i = 0xE000; i < 0x10000; i++)
-        memory[i] = nascom_rom["BASIC@E000"].charCodeAt(i - 0xE000);
+    }
 
     canvas = document.getElementById('screen');
     ctx = canvas.getContext('2d');
@@ -480,8 +472,14 @@ function nascom_init() {
 }
 
 
+// Restart with clear memory and default ROMs
+function ui_cold_start() {
+    clear_ram_default_rom()
+    z80_reset();
+}
+
 function ui_select_rom() {
-    nascom_reset();
+    ui_reset();
 }
 
 function nascom_tape_lib() {
@@ -492,26 +490,42 @@ function nascom_tape_lib() {
 // The very first time you run, there is no saved persistent data
 // and therefore no ROM to boot from. After you press "reset" it
 // loads the (selected) ROM
-function nascom_reset() {
-
+function ui_reset() {
     // Load the selected ROM monitor
-    // [NAC HACK 2020Mar26] should cope with 1K roms as well. This just
-    // ignored overrun of the array!!
     var x =  document.getElementById("ROM").value;
-
-
-    console.log("In nascom_reset loading "+ nascom_rom[x].length + " bytes from ROM "+x);
-    for (i = 0; i < 0x800; i++)
-        memory[i] = nascom_rom[x].charCodeAt(i);
+    load_rom(x);
 
     z80_reset();
 }
 
+// Load a ROM image from nascom_rom into memory. If the ROM name is
+// of the form foo@bar then treat 'bar' as a hex load address, otherwise
+// load at 0.
+function load_rom(rom) {
+    var bits = rom.split("@");
+    var load_addr = parseInt(bits[1], 16);
+    var len = nascom_rom[rom].length;
 
-function nascom_clear() {
+    if (isNaN(load_addr))
+        load_addr = 0;
+
+    console.log("Load ROM "+ rom + " (0x" + len.toString(16) + " bytes at address 0x" + load_addr.toString(16) + ")");
+    for (i = 0; i < len; i++)
+        memory[load_addr + i] = nascom_rom[rom].charCodeAt(i);
+
+    // For 1K monitor, set the other 1K of ROM space to 0xFF
+    // otherwise there will be stale data there which may
+    // cause confusion.
+    if ((load_addr == 0) && (len == 0x400))
+        for (i = 0; i < 0x400; i++)
+            memory[0x400 + i] = 0xff;
+}
+
+function clear_ram_default_rom() {
     for (i = 0x800; i < 0xE000; i++)
         memory[i] = 0;
-    z80_reset();
+    load_rom("NAS-SYS3");
+    load_rom("BASIC@E000");
 }
 
 
