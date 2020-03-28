@@ -705,25 +705,17 @@ function frame() {
 }
 
 function run() {
-
     // if (!running) return;
     frame();
-
     setTimeout(run, 20);
 }
 
-function contend_memory(addr) {
-    return 0; /* TODO: implement */
-}
-function contend_port(addr) {
-    return 0; /* TODO: implement */
-}
-function readbyte(addr) {
-    return readbyte_internal(addr);
-}
-function readbyte_internal(addr) {
-    return memory[addr];
-}
+
+///////////////////////////////////////////////////////////////////////
+// z80 emulator calls readport/writeport/writebyte_internal
+// for memory reads, it accesses memory[] directly.
+
+// called by z80 emulator
 function readport(port) {
     port &= 255;
 
@@ -766,13 +758,12 @@ function readport(port) {
     }
 }
 
+// called by z80 emulator
 function writeport(port, value) {
     port &= 255;
 
-//    if (port != 0 || (value & ~31) != 0)
-//        console.log("writeport "+port+","+value);
-
-    if (port == 0) {
+    switch (port) {
+    case 0:
         /* KBD */
         var down_trans = port0 & ~value;
         var up_trans = ~port0 & value;
@@ -793,7 +784,7 @@ function writeport(port, value) {
                 //console.log("replay_active' " + replay_active);
             }
         }
-        // bit 2 and 5 also go to the keyboard but does what?
+        // bit 2 and 5 also go to the keyboard but are unused
         if (8 & up_trans) {
         // console.log("Single-step triggered");
             /* The logic implemented by IC14 & IC15
@@ -833,13 +824,15 @@ function writeport(port, value) {
             if (tape_led == 0)
                 replay_kbd(led_off_str);
         }
-    }
+        break;
 
-    if (port == 1) {
+    case 1:
+        // UART data
         console.log("serial out " + value);
-    }
+        break;
 
-    if (port == 10) {
+    case 10:
+        // I/O to front-panel LEDs and console box
         if (document.getElementById("io"))
             document.getElementById("io").value = "port 10:" + value;
 
@@ -847,36 +840,41 @@ function writeport(port, value) {
         ui_led("led2", value, 2);
         ui_led("led3", value, 4);
         ui_led("led4", value, 8);
-    }
-    if ((port & 0xF0) == 0xE0) {
+        break;
+
+    case 0xE0:
+    case 0xE1:
+    case 0xE2:
+    case 0xE3:
+    case 0xE4:
+    case 0xE5:
+        // floppy-disk controller
         fdc_wr(port, value);
+        break;
+
+    default:
+        console.log("writeport "+port+","+value);
     }
 }
 
-function writebyte(addr, val) {
-    return writebyte_internal(addr, val)
-}
-
+// called by z80 emulator
+// ROM area (low 2Kbytes) and BASIC (E000-FFFF) cannot
+// be written by z80 code.
 function writebyte_internal(addr, val) {
-    /* Optimize for the common case */
+    // Optimize for the common case
     if (0xC00 <= addr && addr < 0xE000) {
-
         // General purpose memory
         memory[addr] = val;
-
-    } else if (0x800 <= addr && addr < 0xC00) {
+    }
+    else if (0x800 <= addr && addr < 0xC00) {
         // Framebuffer
 
         if (((addr - 10) & 63) < 48) {
-
             // Visible Screen write
-            var oldByte = memory[addr];
-            memory[addr] = val;
-
-            if (val != oldByte)
+            if (val != memory[addr])
                 drawScreenByte(addr, val);
-        } else
-            memory[addr] = val;
+        }
+        memory[addr] = val;
     }
 }
 
@@ -896,7 +894,7 @@ function drawScreenByte(addr, val) {
                   x*8,y*char_height,    // dx,dy
                   8, char_height);      // dWidth, dHeight
     } else
-        console.log("Oh no, it would appear what drawScreenByte is called "
+        console.log("Oh no, it would appear that drawScreenByte is called "
                     + "before all of the necessary resources are defined");
 }
 
@@ -909,6 +907,7 @@ function paintScreen() {
 }
 
 
+///////////////////////////////////////////////////////////////////////
 // Emulation of MAP80/GM809 Floppy Disk Controller, WD1797/WD2797
 // floppy disk controller. Goal is not to write an emulation that can be used to
 // debug new disk drivers. Rather, it is to write an emulation that can run Known
