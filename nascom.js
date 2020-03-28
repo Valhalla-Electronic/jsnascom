@@ -447,7 +447,7 @@ function nascom_init() {
     Object.keys(nascom_rom).forEach(function(key) {
         ROMOptions += "<option>" + key + "</option>";
     });
-    document.getElementById("Monitor").innerHTML = ROMOptions;
+    document.getElementById("ROM").innerHTML = ROMOptions;
 
     z80_init();
     fdc_init();
@@ -469,7 +469,7 @@ function nascom_init() {
 
     // ROM Basic
     for (i = 0xE000; i < 0x10000; i++)
-        memory[i] = rom_basic.charCodeAt(i - 0xE000);
+        memory[i] = nascom_rom["BASIC@E000"].charCodeAt(i - 0xE000);
 
     canvas = document.getElementById('screen');
     ctx = canvas.getContext('2d');
@@ -480,7 +480,7 @@ function nascom_init() {
 }
 
 
-function nascom_monitor() {
+function ui_select_rom() {
     nascom_reset();
 }
 
@@ -497,8 +497,7 @@ function nascom_reset() {
     // Load the selected ROM monitor
     // [NAC HACK 2020Mar26] should cope with 1K roms as well. This just
     // ignored overrun of the array!!
-//    var x = document.querySelector('input[name="rom_monitor"]:checked').value;
-    var x =  document.getElementById("Monitor").value;
+    var x =  document.getElementById("ROM").value;
 
 
     console.log("In nascom_reset loading "+ nascom_rom[x].length + " bytes from ROM "+x);

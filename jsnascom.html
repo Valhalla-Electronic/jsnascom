@@ -78,7 +78,7 @@
 <script type="text/javascript" src="NASBUGT4.js"></script>
 <script type="text/javascript" src="BBUG.js"></script>
 <script type="text/javascript" src="NASBUGT2.js"></script>
-<script type="text/javascript" src="rom_basic.js"></script>
+<script type="text/javascript" src="BASIC.js"></script>
 <script type="text/javascript" src="z80/z80_full.js"></script>
 <script type="text/javascript" src="z80/z80_ops_full.js"></script>
 <script type="text/javascript" src="repo.js"></script>
@@ -89,10 +89,8 @@
 <table border="0">
   <tr valign="top"><td>
 
-    <!-- <h1>Nascom 2</h1> -->
     <canvas id="screen" width="384" height="240"></canvas>
     <td>
-    <!-- KBD:  <input id="t1" autocapitalize="off" value="" size=6 onchange="form_enter();"><br> -->
     <button id="reset">Reset</button>
     <button id="nmi">NMI</button>
     <button id="clear">Clear RAM and Reset</button>
@@ -101,7 +99,7 @@
     TAPE: <img id="led_tape" src=grey25.png>
     HALT: <img id="led_halt" src=grey25.png><br>
 
-    <select name="Monitor" id="Monitor" onchange="nascom_monitor()">
+    <select name="ROM" id="ROM" onchange="ui_select_rom()">
       <option value="" disabled selected>Select</option>
     </select>
 
