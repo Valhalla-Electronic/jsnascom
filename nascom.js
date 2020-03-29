@@ -68,6 +68,12 @@ var nmi_pending = false;
 
 fdc = new Object();
 fdc.s = { IDLE : 0, DRV: 1, TRK: 2, INRD : 3, INWR : 4 };
+// disk drives are turned on by kicking a monostable and kept
+// on by kicking it periodically. They turn off automatically when
+// the monostable times-out. The kick sets this counter to a tuned
+// big value. It decrements each screen update cycle and then the
+// drive is turned off when it reaches 0.
+var fdc_on_count = 0;
 
 function advance_replay() {
     replay_active = replay_active_go;
@@ -708,6 +714,16 @@ function run() {
     // if (!running) return;
     frame();
     setTimeout(run, 20);
+
+    if (fdc_on_count == 1) {
+        ui_led("led0_dsk", 0, 1);
+        ui_led("led1_dsk", 0, 2);
+        ui_led("led2_dsk", 0, 4);
+        ui_led("led3_dsk", 0, 8);
+    }
+    else if (fdc_on_count != 0) {
+        fdc_on_count = fdc_on_count - 1;
+    }
 }
 
 
@@ -1097,8 +1113,11 @@ function fdc_wr(port,value) {
         ui_led("led3_dsk", value, 8);
 
         if ((fdc.drv & 0x0f) == (value & 0xf)) {
-            console.log("fdc_wr keep motor running..");
+            console.log("fdc_wr keep motor running.. count is "+ fdc_on_count);
+            fdc_on_count = 20;
             // just keep the motor running
+            // ..for all other disk operations, *should* check that fdc_on_count != 0 (ie,
+            // the motor is on!!)
         }
         else {
             if ((fdc.state == fdc.s.INWR) || (fdc.state == fdc.INRD)) {
