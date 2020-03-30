@@ -932,10 +932,15 @@ function fdc_init() {
     // disk geometry. Used to turn a track/sector into an offset into
     // a binary disk image. If necessary, could be different per-drive
     // in order to allow (eg) transfer from one drive image to another.
+//    fdc.SECTOR_SZ = 256;
+//    fdc.SECTORS = 18;
+//    fdc.TRACKS = 80;
+//    fdc.SIDES = 1;
+
     fdc.SECTOR_SZ = 256;
     fdc.SECTORS = 18;
-    fdc.TRACKS = 80;
-    fdc.SIDES = 1;
+    fdc.TRACKS = 35;
+    fdc.SIDES = 2;
 
     fdc.state = fdc.s.IDLE;
 
@@ -965,6 +970,7 @@ function fdc_init() {
     fdc.cmd = 0;
     fdc.trk = 0;
     fdc.sec = 0;
+    fdc.side = 0;
     fdc.dat = 0;
     fdc.drv = 0;
     // emulates value to read back from status register
@@ -989,7 +995,6 @@ function fdc_wr(port,value) {
         fdc.pinstatus = fdc.pinstatus & 0xfe;
 
         fdc.cmd = value;
-
         if ((fdc.cmd & 0xf0) == 0xd0) {
             // interrupt. Any data we had buffered is discarded implicitly by the state change.
             fdc.pinstatus = fdc.pinstatus | 1;
@@ -1057,25 +1062,29 @@ function fdc_wr(port,value) {
         }
         else if ((fdc.cmd & 0xf0) == 0x80) {
             // read sector
+            fdc.side = (value & 2) >> 1;
             fdc.pinstatus = fdc.pinstatus | 0x80;
             fdc.status = 0x03;
             fdc.state = fdc.s.INRD;
 
             fdc.current = hot2bin(fdc.drv) - 1;
-            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS + fdc.sec*fdc.SECTOR_SZ;
+            // fdc.SIDES is 1 or 2, fdc.side is 0 or 1.
+            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS*fdc.SIDES + (fdc.SECTORS*fdc.side + fdc.sec)*fdc.SECTOR_SZ;
             fdc.buflast = fdc.bufindx + fdc.SECTOR_SZ - 1;
-            console.log("fdc_wr read_sector t="+fdc.trk+" s="+fdc.sec+" data index "+fdc.current);
+            console.log("fdc_wr read_sector t="+fdc.trk+" side="+fdc.side+" s="+fdc.sec+" data index 0x"+fdc.bufindx);
         }
         else if ((fdc.cmd & 0xf0) == 0xa0) {
             // write sector
+            fdc.side = (value & 2) >> 1;
             fdc.pinstatus = fdc.pinstatus | 0x80;
             fdc.status = 0x03;
             fdc.state = fdc.s.INWR;
 
             fdc.current = hot2bin(fdc.drv) - 1;
-            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS + fdc.sec*fdc.SECTOR_SZ;
+            // fdc.SIDES is 1 or 2, fdc.side is 0 or 1.
+            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS*fdc.SIDES + (fdc.SECTORS*fdc.side + fdc.sec)*fdc.SECTOR_SZ;
             fdc.buflast = fdc.bufindx + fdc.SECTOR_SZ - 1;
-            console.log("fdc_wr write_sector t="+fdc.trk+" s="+fdc.sec+" data index "+fdc.current);
+            console.log("fdc_wr write_sector t="+fdc.trk+" side="+fdc.side+" s="+fdc.sec+" data index 0x"+fdc.bufindx.toString(16));
         }
         else {
             console.log("fdc_wr warning: command write with unknown command "+value);
