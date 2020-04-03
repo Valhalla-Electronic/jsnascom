@@ -769,7 +769,7 @@ function readport(port) {
         return fdc_rd(port);
 
     default:
-        console.log("readport "+port);
+        console.log("readport 0x"+port.toString(16));
         return 0;
     }
 }
@@ -869,7 +869,7 @@ function writeport(port, value) {
         break;
 
     default:
-        console.log("writeport "+port+","+value);
+        console.log("writeport 0x"+port.toString(16)+"=0x"+value.toString(16));
     }
 }
 
@@ -932,27 +932,52 @@ function fdc_init() {
     // disk geometry. Used to turn a track/sector into an offset into
     // a binary disk image. If necessary, could be different per-drive
     // in order to allow (eg) transfer from one drive image to another.
-//    fdc.SECTOR_SZ = 256;
-//    fdc.SECTORS = 18;
-//    fdc.TRACKS = 80;
-//    fdc.SIDES = 1;
-
-    fdc.SECTOR_SZ = 256;
-    fdc.SECTORS = 18;
-    fdc.TRACKS = 35;
-    fdc.SIDES = 2;
+// PolyDos3
+    if (1) {
+        fdc.SECTOR_SZ = 256;
+        fdc.SECTORS = 18;
+        fdc.FIRSTSECTOR = 0;
+        fdc.TRACKS = 80;
+        fdc.SIDES = 1;
+    }
+// PolyDos2
+    if (0) {
+        fdc.SECTOR_SZ = 256;
+        fdc.SECTORS = 18;
+        fdc.FIRSTSECTOR = 0;
+        fdc.TRACKS = 35;
+        fdc.SIDES = 2;
+    }
+// CP/M
+    if (0) {
+        fdc.SECTOR_SZ = 512;
+        fdc.SECTORS = 10;
+        fdc.FIRSTSECTOR = 1;
+        fdc.TRACKS = 77;
+        fdc.SIDES = 1;
+    }
+// NAS-DOS
+// disk image is actually 2-sided but the way 2-sided disks works in
+// NAS-DOS is weird so ignore that wrinkle for now
+    if (0) {
+        fdc.SECTOR_SZ = 256;
+        fdc.SECTORS = 16;
+        fdc.FIRSTSECTOR = 0;
+        fdc.TRACKS = 80;
+        fdc.SIDES = 1;
+    }
 
     fdc.state = fdc.s.IDLE;
 
-    fdc.file = [];
-    fdc.buf = [];
     // 4 drives
+    fdc.file = [];
     fdc.file[0] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
     fdc.file[1] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
     fdc.file[2] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
     fdc.file[3] = new ArrayBuffer(fdc.SECTOR_SZ * fdc.SECTORS * fdc.TRACKS * fdc.SIDES);
-    // fdc.buf[0]..[3] assigned when the files are loaded
-    // 6-byte buffer for read address command.
+    // When the disk images are loaded, fdc.buf[0]..[3] hold the entire disk contents
+    // fdc.buf[4] is used as a 6-byte buffer for read address command.
+    fdc.buf = [];
     fdc.buf[4] = new Uint8Array(6);
 
     // For reads and writes, bufindx is calculated as the first offset
@@ -1044,8 +1069,9 @@ function fdc_wr(port,value) {
             console.log("fdc_wr cmd=step, track="+fdc.trk);
         }
         else if ((fdc.cmd & 0xf0) == 0xc0) {
-            // read address. Used by PolyDos to detect whether a disk is
-            // present in the drive.
+            // read address.
+            // Used by PolyDos to detect whether a disk is present in the drive.
+            // Used by NASDOS to work out whether to seek??
             fdc.pinstatus = fdc.pinstatus | 0x80;
             fdc.status = 0x00; // [NAC HACK 2018Feb25] fix
             fdc.state = fdc.s.INRD;
@@ -1053,7 +1079,7 @@ function fdc_wr(port,value) {
             fdc.bufindx = 0;
             fdc.buflast = 5;
             fdc.buf[4][0] = fdc.trk;
-            fdc.buf[4][1] = 0; // side
+            fdc.buf[4][1] = fdc.side;
             fdc.buf[4][2] = fdc.sec; // sector [NAC HACK 2015Jun10] ?
             fdc.buf[4][3] = 1; // sector length 0:128 1:256 2:512 3:1024
             fdc.buf[4][4] = 0; // CRC
@@ -1069,7 +1095,7 @@ function fdc_wr(port,value) {
 
             fdc.current = hot2bin(fdc.drv) - 1;
             // fdc.SIDES is 1 or 2, fdc.side is 0 or 1.
-            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS*fdc.SIDES + (fdc.SECTORS*fdc.side + fdc.sec)*fdc.SECTOR_SZ;
+            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS*fdc.SIDES + (fdc.SECTORS*fdc.side + fdc.sec - fdc.FIRSTSECTOR)*fdc.SECTOR_SZ;
             fdc.buflast = fdc.bufindx + fdc.SECTOR_SZ - 1;
             console.log("fdc_wr read_sector t="+fdc.trk+" side="+fdc.side+" s="+fdc.sec+" data index 0x"+fdc.bufindx);
         }
@@ -1082,7 +1108,7 @@ function fdc_wr(port,value) {
 
             fdc.current = hot2bin(fdc.drv) - 1;
             // fdc.SIDES is 1 or 2, fdc.side is 0 or 1.
-            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS*fdc.SIDES + (fdc.SECTORS*fdc.side + fdc.sec)*fdc.SECTOR_SZ;
+            fdc.bufindx = fdc.trk*fdc.SECTOR_SZ*fdc.SECTORS*fdc.SIDES + (fdc.SECTORS*fdc.side + fdc.sec - fdc.FIRSTSECTOR)*fdc.SECTOR_SZ;
             fdc.buflast = fdc.bufindx + fdc.SECTOR_SZ - 1;
             console.log("fdc_wr write_sector t="+fdc.trk+" side="+fdc.side+" s="+fdc.sec+" data index 0x"+fdc.bufindx.toString(16));
         }
@@ -1134,7 +1160,7 @@ function fdc_wr(port,value) {
             }
             else {
                 if ((value & 0x20) == 0) {
-                    console.log("fdc_wr info: select drive "+value+" -- motor off");
+                    console.log("fdc_wr info: select drive 0x"+value.toString(16)+" -- motor off");
                 }
                 fdc.drv = value;
                 fdc.state = fdc.s.DRV;
@@ -1173,7 +1199,7 @@ function fdc_rd(port) {
             return fdc.buf[fdc.current][fdc.bufindx++];
         }
         else {
-            console.log("ERROR fdc_rd but not INRD");
+            console.log("ERROR fdc_rd but state="+fdc.state+" expecting INRD");
             return 0;
         }
     case 4: // pin status
